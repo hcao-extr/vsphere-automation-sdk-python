@@ -36,6 +36,29 @@ class AioSeedISOManager(object):
         self.iso_folder = os.getenv("FOLDER")
         self.iso_name = None
 
+    def find_vm_by_name_recursive(self, folder, vm_name):
+        """
+        Recursively search for a VM by name in a folder and its subfolders.
+        :param folder: The current folder or container being searched.
+        :param vm_name: The name of the VM to search for.
+        :return: The VM object if found, otherwise None.
+        """
+        for child in folder.childEntity:
+            if isinstance(child, vim.VirtualMachine):
+                # If the child is a VM, check its name
+                if child.name == vm_name:
+                    return child
+            elif isinstance(child, vim.Folder):
+                # If child is a folder, recursively search in the folder
+                vm = self.find_vm_by_name_recursive(child, vm_name)
+                if vm:
+                    return vm
+            elif isinstance(child, vim.Datacenter):
+                # If child is a Data Center, recursively search in the Data Center
+                vm = self.find_vm_by_name_recursive(child, vm_name)
+                if vm:
+                    return vm
+        return None
 
     def createSeedISOAndAddToVM(self, vm_name, ip_addr):
         """
@@ -80,12 +103,10 @@ class AioSeedISOManager(object):
         # check if VM exists
         for dc in content.rootFolder.childEntity:
             vm_folder = dc.vmFolder
-            vm_list = vm_folder.childEntity
-            for vm_item in vm_list:
-                if vm_item.name == vm_name:
-                    self.datacenter = dc
-                    self.vm = vm_item
-                    break
+            self.vm = self.find_vm_by_name_recursive(vm_folder, vm_name)
+            if self.vm is not None:
+                self.datacenter = dc
+                break
         if self.vm is None:
             print("VM not found")
             Disconnect(self.client)
